@@ -1,47 +1,84 @@
-# Solana Address Book
+# Solana Address Book (Easy)
 
-Standalone REST API for managing a Solana address book with contact storage, wallet vs PDA classification, ATA derivation, ownership verification, and PDA derivation.
+Build a REST API for managing a Solana address book. Store contacts with auto-detected address types (wallet vs PDA), derive Associated Token Accounts, verify address ownership via ed25519 signatures, and derive PDAs.
 
-## Result
+## Requirements
 
-- Judge result: `30/30`
-- Runtime: Node.js + TypeScript
-- Stack: Express, `@solana/web3.js`, `tweetnacl`, `bs58`, `zod`
+### Contacts CRUD
 
-## Challenge Summary
+- **POST /api/contacts** — Add a contact
+  - Body: `{ name: string, address: string }`
+  - Validate `address` is a valid base58-encoded 32-byte Solana public key
+  - Auto-detect `type`: `"wallet"` if the address is on the Ed25519 curve, `"pda"` if off-curve
+  - Response `201`: `{ id: number, name, address, type, createdAt: string }`
+  - Response `400`: missing or invalid fields
+  - Response `409`: address already exists
 
-This project implements:
+- **GET /api/contacts** — List all contacts
+  - Query param: `?type=wallet` or `?type=pda` (optional filter)
+  - Response `200`: array of contacts sorted by id ascending
 
-- contact CRUD endpoints
-- automatic address type detection
-- associated token account derivation
-- Ed25519 ownership verification
-- PDA derivation from UTF-8 seeds
+- **GET /api/contacts/:id** — Get a contact by ID
+  - Response `200`: contact object
+  - Response `404`: `{ error: "Contact not found" }`
 
-## API Surface
+- **PUT /api/contacts/:id** — Update a contact's name
+  - Body: `{ name: string }`
+  - Response `200`: updated contact
+  - Response `400`: missing name
+  - Response `404`: not found
 
-- `POST /api/contacts`
-- `GET /api/contacts`
-- `GET /api/contacts/:id`
-- `PUT /api/contacts/:id`
-- `DELETE /api/contacts/:id`
-- `POST /api/contacts/:id/derive-ata`
-- `POST /api/verify-ownership`
-- `POST /api/derive-pda`
+- **DELETE /api/contacts/:id** — Delete a contact
+  - Response `200`: `{ message: "Contact deleted" }`
+  - Response `404`: not found
 
-## Key Behavior
+### ATA Derivation
 
-- Validates Solana public keys for stored contacts.
-- Detects whether a contact address is on-curve (`wallet`) or off-curve (`pda`).
-- Derives the Associated Token Account using the standard token and associated token program IDs.
-- Verifies Ed25519 signatures locally from UTF-8 message bytes.
-- Derives PDAs from UTF-8 seed strings without any network calls.
+- **POST /api/contacts/:id/derive-ata** — Derive Associated Token Account for a contact
+  - Body: `{ mintAddress: string }`
+  - ATA = `PublicKey.findProgramAddressSync([ownerPubkey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mintPubkey.toBuffer()], ASSOCIATED_TOKEN_PROGRAM_ID)`
+  - TOKEN_PROGRAM_ID: `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`
+  - ASSOCIATED_TOKEN_PROGRAM_ID: `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL`
+  - Response `200`: `{ ata: string, owner: string, mint: string }`
+  - Response `400`: invalid mint address
+  - Response `404`: contact not found
 
-## Run Locally
+### Signature Verification
 
-```bash
-npm install
-npm start
+- **POST /api/verify-ownership** — Verify ed25519 signature
+  - Body: `{ address: string, message: string, signature: string }` (address and signature are base58)
+  - Verify using `nacl.sign.detached.verify` on the UTF-8 message bytes
+  - Response `200`: `{ valid: boolean }`
+  - Response `400`: missing fields or invalid inputs
+
+### PDA Derivation
+
+- **POST /api/derive-pda** — Derive a PDA
+  - Body: `{ programId: string, seeds: string[] }` (seeds are UTF-8 strings)
+  - Response `200`: `{ pda: string, bump: number }`
+  - Response `400`: invalid programId, missing seeds, any seed exceeds 32 bytes
+
+## Tech Stack
+
+- **Runtime**: Node.js with TypeScript (tsx)
+- **Framework**: Express.js
+- **Libraries**: `@solana/web3.js`, `bs58`, `tweetnacl`
+- **Storage**: In-memory (no database)
+
+## Start Command
+
+```
+npm install && npm start
 ```
 
-The server listens on port `3000`.
+The server must listen on port **3000**. No database is needed — all data is stored in memory.
+
+## Notes
+
+- Use `PublicKey.isOnCurve(pubkey.toBytes())` to check if an address is a wallet (on-curve) or PDA (off-curve)
+- All cryptographic operations are performed locally — no network calls needed
+- Secret keys and signatures use base58 encoding
+
+## Additional Information
+
+- Judge result: `30/30`
