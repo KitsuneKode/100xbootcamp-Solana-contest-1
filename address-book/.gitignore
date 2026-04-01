@@ -1,0 +1,6 @@
+PLAN.md
+Question.md
+SPECIFICATION.md
+node_modules/
+dist/
+*.log
